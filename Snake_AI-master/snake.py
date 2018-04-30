@@ -47,7 +47,7 @@ def draw( mapArray, score, isOver):
     if isOver:
         gameOver(screen)
     pygame.display.update()
-    pygame.time.delay(500)
+    pygame.time.delay(300)
 
 def drawScore(score):
     global width, screen

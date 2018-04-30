@@ -53,13 +53,14 @@ import snake
 class Snake_Game(Env):
     
     #環境的初始化（毫不猶豫，一定要填）
-    def __init__(self):
+    def __init__(self, mode="test"):
         
         #狀態空間、動作空間，以及reward的定義必須依照gym的資料結構
         self.action_space = spaces.Discrete(4)
         self.observation_space = spaces.Box(low = 0, high = 3, shape = (8, 8))
         self.reward_range = (-1, 1000)
         
+        self.mode = mode 
         #障礙物的數目
         self.num_of_blocks = 5
         
@@ -153,7 +154,8 @@ class Snake_Game(Env):
     def step(self, action):
         
         #繪圖用
-        snake.init()
+        if self.mode == "test":
+            snake.init()
         
         #這裡必須回傳特定資料作為紀錄（格式是字典檔），因為我們目前沒有需要，所以隨便設個空的字典檔。
         info = dict()
@@ -196,7 +198,8 @@ class Snake_Game(Env):
                 #print(self.head)
             else:
                 self.DONE = True
-                snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
+                if self.mode == "test": 
+                    snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
                 return self.get_observation(), -10, self.DONE, info
                    
         #horizontal axis
@@ -210,7 +213,8 @@ class Snake_Game(Env):
                 self.head = (self.head[0], column)  
             else:
                 self.DONE = True
-                snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
+                if self.mode == "test":
+                    snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
                 return self.get_observation(), -10, self.DONE, info 
         
             
@@ -265,7 +269,8 @@ class Snake_Game(Env):
                 
             self.board[self.head] = 3
             self.board[pop] = 0
-            snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
+            if self.mode == "test":
+                snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
             return self.get_observation(), -10, self.DONE, info
         
         
@@ -278,7 +283,8 @@ class Snake_Game(Env):
             
         #這裡要回傳什麼，回傳的順序，都是gym規定的
         self.score += reward
-        snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
+        if self.mode == "test":
+            snake.draw( mapArray=self.board, score=self.score, isOver=self.DONE)
         return self.get_observation(), reward, self.DONE, info
             
             
@@ -332,9 +338,7 @@ class Snake_Game(Env):
 
 # In[4]:
 
-#把我們辛苦架好的遊戲環境作為測試環境
-Snake_env = Snake_Game()
-nb_actions = Snake_env.action_space.n
+#要開始建模了
 
 #這裡的window_length 是指當我需要傳入包括前幾次畫面作為資料時的東西，
 #他是把它當作CNN的channel數一樣的東西
@@ -372,6 +376,10 @@ Layer_1 = Dense(16, activation = "relu")(preprocessed_input)
 Layer_2 = Dense(32, activation = "relu")(Layer_1)
 Layer_3 = Dense(64, activation = "relu")(Layer_2)
 
+#conv_1 = Conv2D(filters = 16, kernel_size = (3, 3), padding='same', activation = "relu")(preprocessed_input)
+#conv_2 = Conv2D(filters = 32, kernel_size = (3, 3), padding='same', activation = "relu")(conv_1)
+#conv_3 = Conv2D(filters = 64, kernel_size = (3, 3), padding='same', activation = "relu")(conv_2)
+
 
 
 # In[4]:
@@ -403,12 +411,12 @@ model.summary()
 #準備要實地測試了：
 
 #你可以自己決定模式跟步數
-mode = input("Mode?")
-step = int(input("Step?"))
+mode = input("Mode? (train or test)")
+step = int(input("Step? (如果可以，請大於1000。"))
 
-
-
-# In[6]:
+#把我們辛苦架好的遊戲環境作為測試環境
+Snake_env = Snake_Game(mode)
+nb_actions = Snake_env.action_space.n
 
 
 #設定記憶體
@@ -419,9 +427,9 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=.6, valu
 
 #DQN設定
 dqn = DQNAgent(model=model, nb_actions=nb_actions, memory = memory, policy = policy,
-               nb_steps_warmup=100, gamma=.90, target_model_update=100)
+               nb_steps_warmup=1000, gamma=.90, target_model_update=1000)
 
-dqn.compile(Adam(lr=.00025), metrics=['mae'])
+dqn.compile(Adam(lr=.01), metrics=['mae'])
 
 
 #實際跑看看
@@ -429,10 +437,10 @@ if mode == 'train':
 
     #儲存權重的一些設定：
     weights_filename = 'dqn_{}_weights.h5f'.format(Snake_env.name)
-    checkpoint_weights_filename = 'dqn_' + Snake_env.name + '_weights2_{step}.h5f'
+    checkpoint_weights_filename = 'dqn_' + Snake_env.name + '_weights_{step}.h5f'
     log_filename = 'dqn_{}_log.json'.format(Snake_env.name)
     callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=1000)]
-    callbacks += [FileLogger(log_filename, interval=100)]
+    callbacks += [FileLogger(log_filename, interval=1000)]
 
 
     weights = "dqn_"+Snake_env.name+"_weights_" + str(step) + ".h5f"
@@ -442,7 +450,7 @@ if mode == 'train':
 
 
     #訓練開始
-    dqn.fit(Snake_env, callbacks=callbacks, nb_steps=step, log_interval=100, verbose=1)
+    dqn.fit(Snake_env, callbacks=callbacks, nb_steps=step, log_interval=1000, verbose=1)
 
     #把權重存起來
     dqn.save_weights(weights_filename, overwrite=True)
